@@ -22,6 +22,19 @@
     <p class="app__subtitle">Ti dà il benvenuto e ti avvisa ogni minuto con l'ora.</p>
   </header>
 
+  <section class="card card--warning" id="insecure-warning" hidden>
+    <h2>⚠️ Contesto non sicuro</h2>
+    <p>
+      Stai aprendo questa pagina come <code id="insecure-url"></code>.
+      I service worker (e quindi installazione e notifiche) funzionano solo
+      su <strong>http://localhost</strong> o <strong>https://</strong>, mai
+      aprendo il file direttamente (<code>file://</code>) o via IP/http non
+      sicuro. Avvia un server locale, ad es.:
+    </p>
+    <pre>python3 -m http.server 8080</pre>
+    <p>e apri <code>http://localhost:8080/index.html</code>.</p>
+  </section>
+
   <section class="card" id="welcome-card">
     <h2>👋 Benvenuto</h2>
     <p id="welcome-text">Caricamento…</p>

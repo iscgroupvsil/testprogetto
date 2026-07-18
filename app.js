@@ -3,6 +3,8 @@
 
   const $ = (id) => document.getElementById(id);
   const welcomeText = $("welcome-text");
+  const insecureWarning = $("insecure-warning");
+  const insecureUrl = $("insecure-url");
   const installCard = $("install-card");
   const installBtn = $("install-btn");
   const installHint = $("install-hint");
@@ -190,10 +192,29 @@
     }
   }
 
+  // ---------- Diagnostica contesto sicuro ----------
+  // Fuori da http://localhost o https:// (es. aperta come file://), Chrome
+  // rimuove del tutto navigator.serviceWorker e beforeinstallprompt non
+  // scatta mai: da qui il messaggio "non supportato" anche se il browser
+  // lo supporterebbe normalmente.
+  function checkSecureContext() {
+    if (!window.isSecureContext) {
+      insecureUrl.textContent = window.location.href;
+      insecureWarning.hidden = false;
+      log("Contesto non sicuro rilevato: " + window.location.protocol);
+      return false;
+    }
+    return true;
+  }
+
   // ---------- Init ----------
   window.addEventListener("online", updateConnectionStatus);
   window.addEventListener("offline", updateConnectionStatus);
   updateConnectionStatus();
   showWelcome();
-  registerServiceWorker();
+  if (checkSecureContext()) {
+    registerServiceWorker();
+  } else {
+    swStatus.textContent = "Service worker: bloccato (contesto non sicuro, vedi avviso sopra).";
+  }
 })();

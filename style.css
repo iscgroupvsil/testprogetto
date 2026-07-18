@@ -60,6 +60,29 @@ body {
   box-shadow: 0 4px 16px rgba(0, 0, 0, 0.35);
 }
 
+.card--warning {
+  background: #3f1d1d;
+  border: 1px solid var(--err);
+}
+
+.card--warning p,
+.card--warning code {
+  color: var(--text);
+}
+
+.card code,
+.card pre {
+  background: rgba(255, 255, 255, 0.08);
+  border-radius: 6px;
+  padding: 2px 6px;
+  font-size: 0.85rem;
+}
+
+.card pre {
+  padding: 10px 12px;
+  overflow-x: auto;
+}
+
 .card h2 {
   margin-top: 0;
   font-size: 1.1rem;
