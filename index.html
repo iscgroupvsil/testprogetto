@@ -1,0 +1,58 @@
+<!DOCTYPE html>
+<html lang="it">
+<head>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover" />
+<title>Notifiche Minute PWA</title>
+<meta name="description" content="PWA di esempio: messaggio di benvenuto, prompt di installazione e notifiche ogni minuto." />
+<meta name="theme-color" content="#4f46e5" />
+<link rel="manifest" href="manifest.webmanifest" />
+<link rel="icon" href="icons/icon-192.png" />
+<link rel="apple-touch-icon" href="icons/icon-192.png" />
+<meta name="apple-mobile-web-app-capable" content="yes" />
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+<meta name="apple-mobile-web-app-title" content="NotificheMin" />
+<link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<main class="app">
+  <header class="app__header">
+    <img src="icons/icon-192.png" alt="" class="app__logo" />
+    <h1>Notifiche Minute PWA</h1>
+    <p class="app__subtitle">Ti dà il benvenuto e ti avvisa ogni minuto con l'ora.</p>
+  </header>
+
+  <section class="card" id="welcome-card">
+    <h2>👋 Benvenuto</h2>
+    <p id="welcome-text">Caricamento…</p>
+  </section>
+
+  <section class="card" id="install-card" hidden>
+    <h2>📲 Installa l'app</h2>
+    <p>Puoi installare questa PWA sul tuo dispositivo per usarla come un'app nativa, anche offline.</p>
+    <button id="install-btn" class="btn btn--primary">Installa app</button>
+    <p class="hint" id="install-hint"></p>
+  </section>
+
+  <section class="card" id="notif-card">
+    <h2>🔔 Notifiche ogni minuto</h2>
+    <p>Attiva le notifiche per ricevere un messaggio con l'orario ogni 60 secondi, finché la pagina resta aperta (in background sul telefono/desktop se l'app è installata).</p>
+    <button id="notif-btn" class="btn btn--primary">Attiva notifiche</button>
+    <p class="hint" id="notif-status">Stato: permesso non richiesto</p>
+    <p class="hint" id="next-tick"></p>
+  </section>
+
+  <section class="card" id="log-card">
+    <h2>📜 Log eventi</h2>
+    <ul id="log-list" class="log-list"></ul>
+  </section>
+
+  <footer class="app__footer">
+    <span id="connection-status">●</span>
+    <span id="sw-status">Service worker: in avvio…</span>
+  </footer>
+</main>
+
+<script src="app.js"></script>
+</body>
+</html>
