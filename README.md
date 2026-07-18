@@ -19,23 +19,23 @@ PWA statica (HTML/CSS/JS puro, nessuna build necessaria) che:
 - `sw.js` — service worker: cache offline dell'app shell, mostra le notifiche, gestisce il click sulla notifica e (dove supportato) il Periodic Background Sync.
 - `manifest.webmanifest` — manifest della PWA (nome, icone, colori, `display: standalone`).
 - `icons/` — icone dell'app (192x192, 512x512, 512x512 maskable).
+- `server.js` — server statico **HTTPS** in Node.js che usa il certificato in `certs/`.
+- `certs/` — certificato TLS autofirmato per lo sviluppo locale (`localhost-cert.pem` + `localhost-key.pem`).
+- `scripts/generate-cert.sh` — rigenera il certificato in `certs/`.
 
 ## Come avviarla in locale
 
-I service worker richiedono **HTTPS oppure `localhost`**: non funzionano aprendo il file `index.html` direttamente con `file://`. Serve quindi un piccolo server statico.
+I service worker richiedono **HTTPS oppure `localhost`**: non funzionano aprendo il file `index.html` direttamente con `file://`. Puoi scegliere tra HTTP su `localhost` (più semplice) oppure HTTPS con il certificato incluso nel progetto (più vicino a un ambiente di produzione, utile ad es. per testare da un altro dispositivo in rete locale).
 
-Scegli una delle opzioni:
+### Opzione A — HTTP su localhost (senza certificato)
 
 ```bash
-# Opzione 1: con Python 3 (già presente su molti sistemi)
+# Con Python 3 (già presente su molti sistemi)
 cd testprogetto
 python3 -m http.server 8080
 
-# Opzione 2: con Node.js
-cd testprogetto
+# oppure con Node.js
 npx serve -l 8080
-# oppure
-npx http-server -p 8080
 ```
 
 Poi apri il browser su:
@@ -44,11 +44,45 @@ Poi apri il browser su:
 http://localhost:8080/index.html
 ```
 
+### Opzione B — HTTPS con il certificato del progetto
+
+Il repository include già un certificato autofirmato in `certs/` e un piccolo server Node.js (`server.js`) che lo usa. Serve solo Node.js, nessuna dipendenza da installare.
+
+```bash
+cd testprogetto
+node server.js          # porta di default: 8443
+# oppure una porta a scelta:
+node server.js 4443
+```
+
+Poi apri il browser su:
+
+```
+https://localhost:8443/index.html
+```
+
+**Al primo accesso il browser mostrerà un avviso "La connessione non è privata"** perché il certificato è autofirmato (non emesso da una CA riconosciuta). È normale: clicca su **Avanzate → Procedi su localhost (non sicuro)** per continuare. Da quel momento service worker, notifiche e prompt di installazione funzioneranno esattamente come con HTTPS reale.
+
+Se vuoi evitare l'avviso del browser, puoi:
+- installare il certificato `certs/localhost-cert.pem` tra le CA attendibili del sistema operativo/browser, oppure
+- usare uno strumento come [mkcert](https://github.com/FiloSottile/mkcert) per generare un certificato locale già fidato dal sistema (poi copia i due file generati sovrascrivendo quelli in `certs/`, mantenendo i nomi `localhost-cert.pem` e `localhost-key.pem`).
+
+#### Rigenerare il certificato
+
+Il certificato incluso è valido 825 giorni (il massimo accettato dai browser per un self-signed) e copre `localhost`, `127.0.0.1` e `::1`. Per rigenerarlo (es. se scaduto, o per includere altri host):
+
+```bash
+cd testprogetto
+./scripts/generate-cert.sh
+```
+
+> ⚠️ Il certificato incluso in `certs/` serve **solo per lo sviluppo locale**. Non ha alcun valore per un dominio pubblico reale: per la produzione usa un certificato emesso da una CA reale (es. Let's Encrypt) o affidati a un hosting che lo fornisce automaticamente (GitHub Pages, Netlify, Vercel — vedi sotto).
+
 ## Come installarla
 
 ### Desktop (Chrome / Edge)
 
-1. Apri `http://localhost:8080/index.html`.
+1. Apri `http://localhost:8080/index.html` (Opzione A) oppure `https://localhost:8443/index.html` accettando l'avviso del certificato (Opzione B).
 2. Nella pagina apparirà la sezione "📲 Installa l'app": clicca **Installa app**.
    - In alternativa, clicca l'icona di installazione (⊕/monitor) che compare a destra nella barra dell'indirizzo.
 3. Conferma nella finestra di dialogo del browser.
