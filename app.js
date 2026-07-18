@@ -187,7 +187,10 @@
         startMinuteNotifications();
       }
     } catch (err) {
-      swStatus.textContent = "Service worker: errore in registrazione.";
+      const isCertError = /certificate|ssl|security/i.test(err.message);
+      swStatus.textContent = isCertError
+        ? "Service worker: bloccato per certificato HTTPS non attendibile (vedi README, sezione HTTPS)."
+        : "Service worker: errore in registrazione (" + err.message + ").";
       log("Errore registrazione service worker: " + err.message);
     }
   }

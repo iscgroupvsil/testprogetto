@@ -61,11 +61,40 @@ Poi apri il browser su:
 https://localhost:8443/index.html
 ```
 
-**Al primo accesso il browser mostrerà un avviso "La connessione non è privata"** perché il certificato è autofirmato (non emesso da una CA riconosciuta). È normale: clicca su **Avanzate → Procedi su localhost (non sicuro)** per continuare. Da quel momento service worker, notifiche e prompt di installazione funzioneranno esattamente come con HTTPS reale.
+**Al primo accesso il browser mostrerà un avviso "La connessione non è privata"** perché il certificato è autofirmato (non emesso da una CA riconosciuta).
 
-Se vuoi evitare l'avviso del browser, puoi:
-- installare il certificato `certs/localhost-cert.pem` tra le CA attendibili del sistema operativo/browser, oppure
-- usare uno strumento come [mkcert](https://github.com/FiloSottile/mkcert) per generare un certificato locale già fidato dal sistema (poi copia i due file generati sovrascrivendo quelli in `certs/`, mantenendo i nomi `localhost-cert.pem` e `localhost-key.pem`).
+⚠️ **Importante**: cliccare su "Avanzate → Procedi su localhost (non sicuro)" fa caricare la pagina, **ma non basta**. Chrome (e gli altri browser Chromium) blocca deliberatamente la registrazione del service worker — e quindi anche il prompt di installazione, che ne dipende — su qualunque pagina HTTPS il cui certificato non sia effettivamente attendibile, anche se hai proceduto manualmente oltre l'avviso. In console vedrai un errore tipo:
+
+```
+Failed to register a ServiceWorker: An SSL certificate error occurred when fetching the script.
+```
+
+Per far funzionare davvero service worker/notifiche/installazione su HTTPS locale hai due strade:
+
+**1) Soluzione rapida (solo Chrome/Edge, solo su questa macchina): abilita il flag per localhost**
+
+1. Apri `chrome://flags/#allow-insecure-localhost`.
+2. Imposta il flag su **Enabled**.
+3. Riavvia il browser.
+4. Ricarica `https://localhost:8443/index.html`: ora il certificato autofirmato viene trattato come valido e tutto funziona.
+
+**2) Soluzione robusta e universale: certificato firmato da una CA locale attendibile con [mkcert](https://github.com/FiloSottile/mkcert)**
+
+`mkcert` installa una CA di sviluppo nel trust store del sistema operativo (e quindi dei browser), così i certificati che genera risultano validi per davvero, senza avvisi e senza flag speciali:
+
+```bash
+# installazione (una tantum), esempio su macOS/Linux con Homebrew:
+brew install mkcert
+mkcert -install                # installa la CA locale nel sistema/browser
+
+# nella cartella del progetto:
+cd testprogetto
+mkcert -key-file certs/localhost-key.pem -cert-file certs/localhost-cert.pem localhost 127.0.0.1 ::1
+```
+
+Questo sovrascrive i file in `certs/` con un certificato realmente attendibile dal tuo sistema. Riavvia `node server.js` e ricarica la pagina: nessun avviso, secure context completo.
+
+Se non vuoi installare nulla, resta comunque disponibile l'**Opzione A (HTTP su `http://localhost`)**: `localhost` è considerato un'origine sicura dal browser anche senza TLS, quindi service worker, notifiche e installazione funzionano subito, senza alcun certificato.
 
 #### Rigenerare il certificato
 
