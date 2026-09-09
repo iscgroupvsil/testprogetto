@@ -2,8 +2,13 @@
 .SYNOPSIS
   Genera il pacchetto .war della PWA, pronto per essere copiato in
   %CATALINA_HOME%\webapps\ di Tomcat, senza toccare nessun'altra webapp.
-  Versione Windows (PowerShell), usa Compress-Archive (nessuna dipendenza
-  esterna: niente bisogno di zip/jar installati a parte).
+  Versione Windows (PowerShell). Costruisce lo zip a basso livello con
+  System.IO.Compression (nessuna dipendenza esterna da zip/jar), usando
+  sempre "/" come separatore nei nomi delle voci: Compress-Archive su
+  Windows le scrive con "\", e Tomcat (ExpandWar) non riconosce il
+  backslash come separatore di percorso nello zip, con il risultato che
+  fallisce a creare le sottocartelle (es. icons\) durante lo scompattamento
+  del WAR.
 
 .USO
   cd testprogetto
@@ -19,6 +24,9 @@ param(
 )
 
 $ErrorActionPreference = "Stop"
+
+Add-Type -AssemblyName System.IO.Compression
+Add-Type -AssemblyName System.IO.Compression.FileSystem
 
 $RootDir  = Split-Path -Parent $PSScriptRoot
 $DistDir  = Join-Path $RootDir "dist"
@@ -41,11 +49,25 @@ try {
     Copy-Item (Join-Path $RootDir "WEB-INF\web.xml") (Join-Path $StageDir "WEB-INF")
 
     if (Test-Path $WarPath) { Remove-Item $WarPath -Force }
-    $tmpZip = Join-Path $DistDir "$ContextName.zip"
-    if (Test-Path $tmpZip) { Remove-Item $tmpZip -Force }
 
-    Compress-Archive -Path (Join-Path $StageDir "*") -DestinationPath $tmpZip -Force
-    Move-Item $tmpZip $WarPath -Force
+    $zip = [System.IO.Compression.ZipFile]::Open($WarPath, [System.IO.Compression.ZipArchiveMode]::Create)
+    try {
+        $stagePrefixLength = $StageDir.TrimEnd('\').Length + 1
+        Get-ChildItem -Path $StageDir -Recurse -File | ForEach-Object {
+            # Nome della voce nello zip: percorso relativo alla cartella di
+            # staging, SEMPRE con "/" come separatore (richiesto dallo
+            # standard ZIP e da Tomcat), indipendentemente dal fatto che
+            # Windows usi "\" sul filesystem.
+            $entryName = $_.FullName.Substring($stagePrefixLength) -replace '\\', '/'
+            [System.IO.Compression.ZipFileExtensions]::CreateEntryFromFile(
+                $zip, $_.FullName, $entryName,
+                [System.IO.Compression.CompressionLevel]::Optimal
+            ) | Out-Null
+        }
+    }
+    finally {
+        $zip.Dispose()
+    }
 
     Write-Host "Pacchetto creato: $WarPath"
     Write-Host ""
