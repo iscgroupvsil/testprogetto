@@ -4,3 +4,6 @@
 *.jar
 *.war
 *.ear
+
+# Pacchetti generati da scripts/build-war.sh
+dist/

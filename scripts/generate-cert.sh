@@ -16,9 +16,18 @@ openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 825 \
   -subj "/CN=localhost" \
   -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1"
 
+# Keystore PKCS12 per il connector HTTPS di Tomcat (server.xml), generato
+# dallo stesso certificato/chiave. Password fissa "changeit" per comodita'
+# di sviluppo: per un ambiente reale rigenera con una password propria.
+openssl pkcs12 -export \
+  -in "$CERT_DIR/localhost-cert.pem" -inkey "$CERT_DIR/localhost-key.pem" \
+  -out "$CERT_DIR/localhost.p12" -name tomcat \
+  -passout pass:changeit
+
 echo "Certificato generato in $CERT_DIR:"
 echo "  - localhost-cert.pem"
 echo "  - localhost-key.pem"
+echo "  - localhost.p12   (keystore per il connector HTTPS di Tomcat, password: changeit)"
 echo
 echo "Attenzione: e' un certificato AUTOFIRMATO, valido solo per sviluppo locale."
 echo "Il browser mostrera' un avviso 'connessione non sicura' finche' non lo"

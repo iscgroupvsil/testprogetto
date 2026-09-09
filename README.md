@@ -20,8 +20,10 @@ PWA statica (HTML/CSS/JS puro, nessuna build necessaria) che:
 - `manifest.webmanifest` — manifest della PWA (nome, icone, colori, `display: standalone`).
 - `icons/` — icone dell'app (192x192, 512x512, 512x512 maskable).
 - `server.js` — server statico **HTTPS** in Node.js che usa il certificato in `certs/`.
-- `certs/` — certificato TLS autofirmato per lo sviluppo locale (`localhost-cert.pem` + `localhost-key.pem`).
-- `scripts/generate-cert.sh` — rigenera il certificato in `certs/`.
+- `certs/` — certificato TLS autofirmato per lo sviluppo locale (`localhost-cert.pem` + `localhost-key.pem` + `localhost.p12`, quest'ultimo usabile come keystore per Tomcat).
+- `scripts/generate-cert.sh` — rigenera il certificato (e il keystore) in `certs/`.
+- `WEB-INF/web.xml` — descrittore della webapp usato solo quando la PWA viene impacchettata per Tomcat (vedi sotto).
+- `scripts/build-war.sh` — genera il pacchetto `.war` da deployare su Tomcat.
 
 ## Come avviarla in locale
 
@@ -138,6 +140,68 @@ Safari non supporta il prompt automatico (`beforeinstallprompt`), quindi la pagi
 2. Accetta il permesso richiesto dal browser/sistema operativo.
 3. Da quel momento, ogni 60 secondi arriverà una notifica con orario aggiornato, finché la pagina/app resta aperta (anche in background su desktop/Android se l'app è installata).
 4. Su Chrome/Edge desktop e Android, se il browser concede il permesso "Periodic Background Sync", l'app prova ad attivarlo per ricevere notifiche anche a pagina completamente chiusa; è un'API sperimentale e non disponibile ovunque (non su Firefox/Safari), quindi il timer lato pagina resta il meccanismo principale e affidabile.
+
+## Deploy su Tomcat, accanto alla webapp Angular (senza toccarla)
+
+Questa PWA è pensata per convivere sullo **stesso Tomcat** che ospita già la webapp Angular (deployata come WAR), come **webapp separata su un context path diverso** — non serve modificare né ricompilare il WAR Angular, solo aggiungere questo pacchetto e (se serve) configurare l'HTTPS di Tomcat.
+
+### 1. Genera il pacchetto `.war`
+
+```bash
+cd testprogetto
+./scripts/build-war.sh notifiche-pwa
+```
+
+Crea `dist/notifiche-pwa.war`, contenente solo i file statici della PWA più un `WEB-INF/web.xml` proprio (mappa `.webmanifest` come `application/manifest+json`: non serve toccare il `web.xml` globale di Tomcat né quello della webapp Angular). Il nome passato allo script diventa il **context path**: scegline uno che non collida con quello già usato dall'app Angular (es. `notifiche-pwa`, non `ROOT` né lo stesso nome dell'altra app).
+
+### 2. Copia il WAR nella cartella `webapps/` di Tomcat
+
+```bash
+cp dist/notifiche-pwa.war "$CATALINA_HOME/webapps/"
+```
+
+Con `autoDeploy="true"` (impostazione di default in `conf/server.xml`) Tomcat la pubblica da sola in pochi secondi; altrimenti riavvia il servizio. Sarà raggiungibile su:
+
+```
+http(s)://<host>[:porta]/notifiche-pwa/
+```
+
+Tutti i percorsi nel progetto (manifest, service worker, icone) sono **relativi**, quindi funzionano automaticamente sotto qualunque context path, senza modifiche.
+
+### 3. Configura HTTPS sul connector di Tomcat (solo config, nessun tocco alla webapp)
+
+Come già visto per lo sviluppo locale, il prompt di installazione e il service worker richiedono un'origine sicura: `http://localhost` va bene solo se accedi dalla stessa macchina col nome letterale `localhost`; se raggiungi Tomcat da un altro dispositivo o con un hostname/IP di rete, **serve HTTPS con un certificato attendibile**. Questa è pura configurazione Tomcat (`conf/server.xml`), non tocca nessuna webapp:
+
+**Per uso interno/di test**, puoi riusare il keystore già generato in `certs/localhost.p12` (password `changeit`) — copialo dove preferisci sul server Tomcat e aggiungi un connector in `conf/server.xml`:
+
+```xml
+<Connector port="8443" protocol="org.apache.coyote.http11.Http11NioProtocol"
+           maxThreads="150" SSLEnabled="true">
+  <SSLHostConfig>
+    <Certificate certificateKeystoreFile="conf/localhost.p12"
+                 certificateKeystorePassword="changeit"
+                 type="RSA" />
+  </SSLHostConfig>
+</Connector>
+```
+
+⚠️ Vale lo stesso avviso già visto in locale: essendo autofirmato, i browser dei client mostreranno l'avviso "connessione non privata" e — a differenza di `localhost` puro in HTTP — un semplice click su "procedi comunque" **non sblocca** service worker/installazione. Per un uso reale (accesso da altri dispositivi, utenti finali) serve un certificato realmente attendibile:
+
+- un certificato emesso da una CA reale (Let's Encrypt, CA interna aziendale) convertito in keystore Java (`.p12` o `.jks`) e referenziato allo stesso modo nel `<Connector>`, oppure
+- un **reverse proxy** davanti a Tomcat (Nginx/Apache/IIS) che termina TLS con un certificato valido e inoltra in HTTP semplice a Tomcat — molto comune in produzione, e non richiede nulla lato Tomcat oltre ad ascoltare in HTTP sulla porta interna.
+
+Per convertire un certificato reale (coppia `.pem`/`.key`) in un keystore PKCS12 utilizzabile da Tomcat:
+
+```bash
+openssl pkcs12 -export -in mio-certificato.pem -inkey mia-chiave.pem \
+  -out mio-keystore.p12 -name tomcat -passout pass:<password-a-scelta>
+```
+
+### 4. Verifica che non ci siano collisioni con l'app Angular
+
+- **Context path diverso** dalla webapp Angular (obbligatorio: due webapp non possono condividere lo stesso path su Tomcat).
+- Se entrambe le app sono **sullo stesso host:porta**, condividono la stessa origine ma hanno **scope diversi** (ognuna cade sotto il proprio context path) — i rispettivi service worker non entrano in conflitto.
+- Se preferisci porte/host separati (es. un virtual host o una porta dedicata solo per la PWA), va bene lo stesso: cambia solo l'URL con cui la raggiungi, la configurazione del WAR resta identica.
 
 ## Pubblicarla online (per installarla su mobile con HTTPS)
 
