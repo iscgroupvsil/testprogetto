@@ -194,11 +194,19 @@ Tutti i percorsi nel progetto (manifest, service worker, icone) sono **relativi*
 
 Come già visto per lo sviluppo locale, il prompt di installazione e il service worker richiedono un'origine sicura: `http://localhost` va bene solo se accedi dalla stessa macchina col nome letterale `localhost`; se raggiungi Tomcat da un altro dispositivo o con un hostname/IP di rete, **serve HTTPS con un certificato attendibile**. Questa è pura configurazione Tomcat (`conf/server.xml`), non tocca nessuna webapp:
 
-**Per uso interno/di test**, puoi riusare il keystore già generato in `certs/localhost.p12` (password `changeit`) — copialo dove preferisci sul server Tomcat e aggiungi un connector in `conf/server.xml`:
+**Per uso interno/di test**, puoi riusare il keystore già generato in `certs/localhost.p12` (password `changeit`) — copialo dove preferisci sul server Tomcat (es. dentro `conf/`) e **aggiungi un connector nuovo, separato da quello HTTP esistente** in `conf/server.xml` (non modificare quest'ultimo, altrimenti smetti di servire HTTP sulla stessa porta):
 
 ```xml
+<!-- connector HTTP esistente, lasciato invariato -->
+<Connector port="7070" protocol="HTTP/1.1"
+           connectionTimeout="20000"
+           redirectPort="8443" />
+
+<!-- nuovo connector HTTPS, porta diversa -->
 <Connector port="8443" protocol="org.apache.coyote.http11.Http11NioProtocol"
-           maxThreads="150" SSLEnabled="true">
+           maxThreads="150" SSLEnabled="true"
+           scheme="https" secure="true"
+           sslEnabledProtocols="TLSv1.2,TLSv1.3">
   <SSLHostConfig>
     <Certificate certificateKeystoreFile="conf/localhost.p12"
                  certificateKeystorePassword="changeit"
@@ -206,6 +214,20 @@ Come già visto per lo sviluppo locale, il prompt di installazione e il service 
   </SSLHostConfig>
 </Connector>
 ```
+
+`scheme="https"` e `secure="true"` non sono opzionali per correttezza: senza, `SSLEnabled="true"` fa comunque terminare il TLS ma l'applicazione vede la richiesta come se fosse HTTP (utile ad es. se qualche componente genera URL assoluti in base allo schema). Dopo il riavvio, nel log Tomcat il nuovo connector deve comparire come `https-nio-...-8443`, non `http-nio-...`: se vedi ancora `http-nio` sulla porta che hai scelto per HTTPS, la configurazione non è stata applicata.
+
+⚠️ **Usa sempre la porta del connector HTTPS per accedere via `https://`** — è un errore comune (capitato spesso in pratica) puntare per sbaglio il browser alla porta del vecchio connector HTTP con `https://` davanti: in quel caso Tomcat riceve i byte cifrati del TLS handshake su una porta che parla solo HTTP in chiaro, e nel log compare un errore tipo `Invalid character found in method name [0x16 0x03 0x01 ...]` — quei byte (`0x16 0x03 0x01`) sono proprio l'inizio di un handshake TLS. Se lo vedi, controlla che l'URL usi la porta giusta.
+
+⚠️ **Il certificato deve coprire l'IP/hostname con cui accedi davvero**: quello incluso di default nel repo copre solo `localhost`/`127.0.0.1`/`::1`. Se raggiungi Tomcat con un IP di rete reale (es. `10.10.15.43`) o un hostname interno, rigeneralo includendolo nel Subject Alternative Name:
+
+```bash
+./scripts/generate-cert.sh 10.10.15.43
+# Windows (PowerShell):
+.\scripts\generate-cert.ps1 -AdditionalHosts 10.10.15.43
+```
+
+poi ricopia il `localhost.p12` risultante nel percorso indicato dal connector Tomcat e riavvia. Senza questo, il browser mostrerà un errore di certificato "hostname mismatch" anche dopo aver sistemato la porta.
 
 ⚠️ Vale lo stesso avviso già visto in locale: essendo autofirmato, i browser dei client mostreranno l'avviso "connessione non privata" e — a differenza di `localhost` puro in HTTP — un semplice click su "procedi comunque" **non sblocca** service worker/installazione. Per un uso reale (accesso da altri dispositivi, utenti finali) serve un certificato realmente attendibile:
 

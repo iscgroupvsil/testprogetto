@@ -1,15 +1,26 @@
 <#
 .SYNOPSIS
-  Genera un certificato TLS autofirmato per sviluppo locale (localhost/127.0.0.1)
-  e il relativo keystore PKCS12 per Tomcat, su Windows (PowerShell).
+  Genera un certificato TLS autofirmato per sviluppo/deploy locale
+  (localhost/127.0.0.1) e il relativo keystore PKCS12 per Tomcat, su
+  Windows (PowerShell).
+
+.PARAMETER AdditionalHosts
+  IP o hostname aggiuntivi da includere nel Subject Alternative Name,
+  oltre a localhost/127.0.0.1/::1. Utile quando il server (es. Tomcat)
+  viene raggiunto tramite un IP di rete reale.
 
 .USO
   cd testprogetto
   .\scripts\generate-cert.ps1
+  .\scripts\generate-cert.ps1 -AdditionalHosts 10.10.15.43
 
   Se PowerShell blocca l'esecuzione degli script, avvialo una volta con:
     Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
 #>
+
+param(
+    [string[]]$AdditionalHosts = @()
+)
 
 $ErrorActionPreference = "Stop"
 
@@ -30,6 +41,16 @@ Installalo con una di queste opzioni e riprova:
     exit 1
 }
 
+$SanEntries = @("DNS:localhost", "IP:127.0.0.1", "IP:::1")
+foreach ($h in $AdditionalHosts) {
+    if ($h -match '^\d+\.\d+\.\d+\.\d+$' -or $h -match ':') {
+        $SanEntries += "IP:$h"
+    } else {
+        $SanEntries += "DNS:$h"
+    }
+}
+$San = $SanEntries -join ","
+
 $keyPath  = Join-Path $CertDir "localhost-key.pem"
 $certPath = Join-Path $CertDir "localhost-cert.pem"
 $p12Path  = Join-Path $CertDir "localhost.p12"
@@ -38,7 +59,7 @@ $p12Path  = Join-Path $CertDir "localhost.p12"
     -keyout $keyPath `
     -out $certPath `
     -subj "/CN=localhost" `
-    -addext "subjectAltName=DNS:localhost,IP:127.0.0.1,IP:::1"
+    -addext "subjectAltName=$San"
 
 # Keystore PKCS12 per il connector HTTPS di Tomcat (server.xml).
 # Password fissa "changeit" per comodita' di sviluppo: per un ambiente
@@ -52,7 +73,8 @@ Write-Host "Certificato generato in $CertDir :"
 Write-Host "  - localhost-cert.pem"
 Write-Host "  - localhost-key.pem"
 Write-Host "  - localhost.p12   (keystore per il connector HTTPS di Tomcat, password: changeit)"
+Write-Host "  SAN incluso: $San"
 Write-Host ""
-Write-Host "Attenzione: e' un certificato AUTOFIRMATO, valido solo per sviluppo locale."
+Write-Host "Attenzione: e' un certificato AUTOFIRMATO, valido solo per sviluppo/uso interno."
 Write-Host "Il browser mostrera' un avviso 'connessione non sicura' finche' non lo"
 Write-Host "accetti manualmente (o lo importi tra le CA attendibili del sistema)."
