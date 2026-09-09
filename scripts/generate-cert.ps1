@@ -42,14 +42,20 @@ Installalo con una di queste opzioni e riprova:
 }
 
 # openssl scrive messaggi di avanzamento (es. "Generating a RSA private
-# key") su stderr: e' normale, non un errore. Se lasciati sul flusso di
-# errore nativo, con $ErrorActionPreference = "Stop" PowerShell li
-# tratterebbe come errori bloccanti anche a comando riuscito. Il
-# redirect "2>&1" li porta sul flusso di output, dove non interrompono
-# lo script; il vero esito si verifica dopo con $LASTEXITCODE.
+# key") su stderr: e' normale, non un errore. Con $ErrorActionPreference
+# = "Stop" attivo, PowerShell tratterebbe comunque quell'output come un
+# errore bloccante (a prescindere da come lo si redirige dopo), quindi
+# per la durata della chiamata nativa lo abbassiamo a "Continue" e
+# verifichiamo l'esito reale con $LASTEXITCODE.
 function Invoke-OpenSsl {
     param([string[]]$Arguments)
-    & openssl @Arguments 2>&1 | ForEach-Object { Write-Host $_ }
+    $previousPreference = $ErrorActionPreference
+    $ErrorActionPreference = "Continue"
+    try {
+        & openssl @Arguments
+    } finally {
+        $ErrorActionPreference = $previousPreference
+    }
     if ($LASTEXITCODE -ne 0) {
         throw "openssl ha restituito un errore (exit code $LASTEXITCODE): openssl $($Arguments -join ' ')"
     }
