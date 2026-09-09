@@ -41,6 +41,20 @@ Installalo con una di queste opzioni e riprova:
     exit 1
 }
 
+# openssl scrive messaggi di avanzamento (es. "Generating a RSA private
+# key") su stderr: e' normale, non un errore. Se lasciati sul flusso di
+# errore nativo, con $ErrorActionPreference = "Stop" PowerShell li
+# tratterebbe come errori bloccanti anche a comando riuscito. Il
+# redirect "2>&1" li porta sul flusso di output, dove non interrompono
+# lo script; il vero esito si verifica dopo con $LASTEXITCODE.
+function Invoke-OpenSsl {
+    param([string[]]$Arguments)
+    & openssl @Arguments 2>&1 | ForEach-Object { Write-Host $_ }
+    if ($LASTEXITCODE -ne 0) {
+        throw "openssl ha restituito un errore (exit code $LASTEXITCODE): openssl $($Arguments -join ' ')"
+    }
+}
+
 $SanEntries = @("DNS:localhost", "IP:127.0.0.1", "IP:::1")
 foreach ($h in $AdditionalHosts) {
     if ($h -match '^\d+\.\d+\.\d+\.\d+$' -or $h -match ':') {
@@ -55,20 +69,25 @@ $keyPath  = Join-Path $CertDir "localhost-key.pem"
 $certPath = Join-Path $CertDir "localhost-cert.pem"
 $p12Path  = Join-Path $CertDir "localhost.p12"
 
-& openssl req -x509 -nodes -newkey rsa:2048 -sha256 -days 825 `
-    -keyout $keyPath `
-    -out $certPath `
-    -subj "/CN=localhost" `
-    -addext "subjectAltName=$San"
+Invoke-OpenSsl @(
+    "req", "-x509", "-nodes", "-newkey", "rsa:2048", "-sha256", "-days", "825",
+    "-keyout", $keyPath,
+    "-out", $certPath,
+    "-subj", "/CN=localhost",
+    "-addext", "subjectAltName=$San"
+)
 
 # Keystore PKCS12 per il connector HTTPS di Tomcat (server.xml).
 # Password fissa "changeit" per comodita' di sviluppo: per un ambiente
 # reale rigenera con una password propria.
-& openssl pkcs12 -export `
-    -in $certPath -inkey $keyPath `
-    -out $p12Path -name tomcat `
-    -passout pass:changeit
+Invoke-OpenSsl @(
+    "pkcs12", "-export",
+    "-in", $certPath, "-inkey", $keyPath,
+    "-out", $p12Path, "-name", "tomcat",
+    "-passout", "pass:changeit"
+)
 
+Write-Host ""
 Write-Host "Certificato generato in $CertDir :"
 Write-Host "  - localhost-cert.pem"
 Write-Host "  - localhost-key.pem"
