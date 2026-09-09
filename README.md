@@ -21,9 +21,11 @@ PWA statica (HTML/CSS/JS puro, nessuna build necessaria) che:
 - `icons/` — icone dell'app (192x192, 512x512, 512x512 maskable).
 - `server.js` — server statico **HTTPS** in Node.js che usa il certificato in `certs/`.
 - `certs/` — certificato TLS autofirmato per lo sviluppo locale (`localhost-cert.pem` + `localhost-key.pem` + `localhost.p12`, quest'ultimo usabile come keystore per Tomcat).
-- `scripts/generate-cert.sh` — rigenera il certificato (e il keystore) in `certs/`.
+- `scripts/generate-cert.sh` / `scripts/generate-cert.ps1` — rigenera il certificato (e il keystore) in `certs/` (bash o PowerShell, vedi nota Windows sotto).
 - `WEB-INF/web.xml` — descrittore della webapp usato solo quando la PWA viene impacchettata per Tomcat (vedi sotto).
-- `scripts/build-war.sh` — genera il pacchetto `.war` da deployare su Tomcat.
+- `scripts/build-war.sh` / `scripts/build-war.ps1` — genera il pacchetto `.war` da deployare su Tomcat (bash o PowerShell).
+
+> 🪟 **Sei su Windows?** Tutti gli script hanno un equivalente PowerShell (`.ps1`) accanto a quello bash (`.sh`) — usa quello. Dettagli più sotto in "Note per Windows".
 
 ## Come avviarla in locale
 
@@ -107,6 +109,13 @@ cd testprogetto
 ./scripts/generate-cert.sh
 ```
 
+Su Windows (PowerShell), equivalente:
+
+```powershell
+cd testprogetto
+.\scripts\generate-cert.ps1
+```
+
 > ⚠️ Il certificato incluso in `certs/` serve **solo per lo sviluppo locale**. Non ha alcun valore per un dominio pubblico reale: per la produzione usa un certificato emesso da una CA reale (es. Let's Encrypt) o affidati a un hosting che lo fornisce automaticamente (GitHub Pages, Netlify, Vercel — vedi sotto).
 
 ## Come installarla
@@ -152,12 +161,25 @@ cd testprogetto
 ./scripts/build-war.sh notifiche-pwa
 ```
 
+Su Windows (PowerShell):
+
+```powershell
+cd testprogetto
+.\scripts\build-war.ps1 -ContextName notifiche-pwa
+```
+
 Crea `dist/notifiche-pwa.war`, contenente solo i file statici della PWA più un `WEB-INF/web.xml` proprio (mappa `.webmanifest` come `application/manifest+json`: non serve toccare il `web.xml` globale di Tomcat né quello della webapp Angular). Il nome passato allo script diventa il **context path**: scegline uno che non collida con quello già usato dall'app Angular (es. `notifiche-pwa`, non `ROOT` né lo stesso nome dell'altra app).
 
 ### 2. Copia il WAR nella cartella `webapps/` di Tomcat
 
 ```bash
 cp dist/notifiche-pwa.war "$CATALINA_HOME/webapps/"
+```
+
+Su Windows (PowerShell/cmd), assumendo che `CATALINA_HOME` sia una variabile d'ambiente già impostata:
+
+```powershell
+copy dist\notifiche-pwa.war "$env:CATALINA_HOME\webapps\"
 ```
 
 Con `autoDeploy="true"` (impostazione di default in `conf/server.xml`) Tomcat la pubblica da sola in pochi secondi; altrimenti riavvia il servizio. Sarà raggiungibile su:
@@ -202,6 +224,28 @@ openssl pkcs12 -export -in mio-certificato.pem -inkey mia-chiave.pem \
 - **Context path diverso** dalla webapp Angular (obbligatorio: due webapp non possono condividere lo stesso path su Tomcat).
 - Se entrambe le app sono **sullo stesso host:porta**, condividono la stessa origine ma hanno **scope diversi** (ognuna cade sotto il proprio context path) — i rispettivi service worker non entrano in conflitto.
 - Se preferisci porte/host separati (es. un virtual host o una porta dedicata solo per la PWA), va bene lo stesso: cambia solo l'URL con cui la raggiungi, la configurazione del WAR resta identica.
+
+## Note per Windows
+
+Tutto quello descritto sopra funziona anche su Windows, con questi accorgimenti:
+
+- **Script di generazione certificato e build del WAR**: usa le versioni `.ps1` (`scripts\generate-cert.ps1`, `scripts\build-war.ps1`) invece delle `.sh`, che richiederebbero Git Bash o WSL. Se PowerShell blocca l'esecuzione con un errore tipo "l'esecuzione di script è disabilitata su questo sistema", sblocca per la sessione corrente con:
+  ```powershell
+  Set-ExecutionPolicy -Scope Process -ExecutionPolicy Bypass
+  ```
+- **`openssl`** (richiesto da `generate-cert.ps1`) non è incluso in Windows di default. Se non lo hai già (es. installato insieme a Git for Windows, che include `openssl.exe`), installalo con uno di:
+  ```powershell
+  choco install openssl
+  # oppure
+  winget install ShiningLight.OpenSSL
+  ```
+- **`node server.js`** (Opzione B, HTTPS in locale) funziona identico su Windows, nessuna modifica: `node server.js` o `node server.js 4443` da PowerShell/cmd.
+- **`python3 -m http.server`** (Opzione A): su Windows il comando di solito si chiama `python`, non `python3`:
+  ```powershell
+  python -m http.server 8080
+  ```
+- **`build-war.ps1`** non richiede `zip`/`jar` esterni: usa `Compress-Archive`, già incluso in PowerShell 5.1+ (presente di default da Windows 10 in poi).
+- **Deploy su Tomcat**: se Tomcat gira come servizio Windows, dopo aver copiato il `.war` in `webapps\` l'auto-deploy funziona come su Linux; se non parte, riavvia il servizio da `services.msc` o con `net stop Tomcat9` / `net start Tomcat9` (nome servizio variabile a seconda dell'installazione).
 
 ## Pubblicarla online (per installarla su mobile con HTTPS)
 
